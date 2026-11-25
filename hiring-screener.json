@@ -1,0 +1,431 @@
+{
+  "active": false,
+  "connections": {
+    "New Application": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Validate Application",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Validate Application": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Parse Application",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Parse Application": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Parse Application JSON",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Parse Application JSON": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Score Fit",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Score Fit": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Route Application",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Route Application": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Invite to Interview",
+            "type": "main"
+          }
+        ],
+        [
+          {
+            "index": 0,
+            "node": "Request More Info",
+            "type": "main"
+          }
+        ],
+        [
+          {
+            "index": 0,
+            "node": "Polite Rejection",
+            "type": "main"
+          }
+        ],
+        [
+          {
+            "index": 0,
+            "node": "Request More Info",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Invite to Interview": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Reply \u2014 Screening Response",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Request More Info": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Reply \u2014 Screening Response",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Polite Rejection": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Reply \u2014 Screening Response",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "index": 0,
+            "node": "Parse Application",
+            "type": "ai_languageModel"
+          },
+          {
+            "index": 0,
+            "node": "Invite to Interview",
+            "type": "ai_languageModel"
+          },
+          {
+            "index": 0,
+            "node": "Request More Info",
+            "type": "ai_languageModel"
+          },
+          {
+            "index": 0,
+            "node": "Polite Rejection",
+            "type": "ai_languageModel"
+          }
+        ]
+      ]
+    }
+  },
+  "name": "AI Hiring Screener",
+  "nodes": [
+    {
+      "id": "32017221-1a63-42ee-b75d-c121b03e6169",
+      "name": "README Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "color": 4,
+        "content": "## AI Hiring Screener (demo role: Customer Support Agent)\nWebhook takes a job application (name, message). Groq AI parses skills, experience, English level and tools, a Code node scores the fit deterministically (experience up to 40 + support background 25 + English up to 20 + tools 15, cap 100), a Switch routes it: score 70+ -> interview invite, 40-69 or no usable info -> ask for more detail, below 40 -> polite rejection. Reply comes back in seconds. No email or sheet step (VM proxy blocks Google APIs; demo only).",
+        "height": 280,
+        "width": 420
+      }
+    },
+    {
+      "id": "302b0dd1-0330-4270-bbe7-620ff5895c71",
+      "name": "New Application",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        320
+      ],
+      "webhookId": "0cf751fb-0c87-4880-a166-65c8b2f64687",
+      "notes": "POST a job application here: { name, message }.",
+      "parameters": {
+        "httpMethod": "POST",
+        "options": {},
+        "path": "screen",
+        "responseMode": "responseNode"
+      }
+    },
+    {
+      "id": "1c5a1f55-3f93-451b-9f0f-3654e264760b",
+      "name": "Validate Application",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        320
+      ],
+      "parameters": {
+        "jsCode": "const body = $json.body || $json; const name = body.name ?? ''; const message = (body.message ?? '').toString(); let valid = true; let reason = 'Application is valid.'; if (!message || message.trim().length === 0) { valid = false; reason = 'Message is empty - please send your application.'; } else if (message.trim().length <= 5) { valid = false; reason = 'Message is too short - please describe your experience in more detail.'; } return [{ json: { name, message: message.trim(), valid, reason } }];"
+      }
+    },
+    {
+      "id": "90cb29b8-01f7-4abb-a9b2-9108d6cd5fea",
+      "name": "Parse Application",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        520,
+        320
+      ],
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ 'Parse this job application message into structured JSON. Applicant name: ' + $json.name + '. Message: ' + $json.message + '. Return ONLY a JSON object with exactly these fields: skills (an array of skill names the applicant mentions, e.g. customer support, communication, CRM), experience_years (a number - total years of work experience mentioned, 0 if none, null if unclear), support_experience (true if they have customer support / customer service / call centre experience, otherwise false), english_level (one of: fluent, good, basic, none - from what they write), tools (an array of tools they mention, e.g. Zendesk, Freshdesk, HubSpot, CRM), availability (when they can start, or null), notes (anything else, or empty string). No markdown, no extra text, just the JSON object.' }}",
+        "options": {
+          "systemMessage": "You are an application parser for a small business hiring a Customer Support Agent. Read the applicant's free-text message and extract their skills, total years of work experience, whether they have customer support experience, their English level, tools they have used, and when they can start. Return ONLY a JSON object: {\"skills\": [\"...\"], \"experience_years\": 0, \"support_experience\": true, \"english_level\": \"...\", \"tools\": [\"...\"], \"availability\": \"...\", \"notes\": \"...\"}. No markdown, no extra text."
+        }
+      }
+    },
+    {
+      "id": "8dc07eaa-e66b-4f65-9e74-ad456ba935cb",
+      "name": "Parse Application JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        780,
+        320
+      ],
+      "parameters": {
+        "jsCode": "const raw = ($json.output || '').toString().trim(); const cleaned = raw.replace(/^```(?:json)?\\s*/i, '').replace(/\\s*```$/, '').trim(); let parsed = {}; try { parsed = JSON.parse(cleaned); } catch (e) { parsed = {}; } const v = $('Validate Application').first().json; const skills = Array.isArray(parsed.skills) ? parsed.skills : []; const tools = Array.isArray(parsed.tools) ? parsed.tools : []; let yrs = parsed.experience_years; if (typeof yrs === 'string') yrs = parseFloat(yrs); if (typeof yrs !== 'number' || isNaN(yrs)) yrs = null; let support = !!parsed.support_experience; if (!support) { const hay = skills.join(' ').toLowerCase(); if (hay.includes('support') || hay.includes('customer service') || hay.includes('call centre') || hay.includes('call center')) support = true; } let eng = (parsed.english_level || 'none').toString().toLowerCase(); if (!['fluent','good','basic','none'].includes(eng)) eng = 'none'; return [{ json: { name: v.name, message: v.message, valid: v.valid, reason: v.reason, skills, experience_years: yrs, support_experience: support, english_level: eng, tools, availability: parsed.availability || null, notes: parsed.notes || '' } }];"
+      }
+    },
+    {
+      "id": "927be864-6a8d-4ae3-9243-a53714eb6922",
+      "name": "Score Fit",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        320
+      ],
+      "parameters": {
+        "jsCode": "const v = $('Parse Application JSON').first().json;\nconst skills = Array.isArray(v.skills) ? v.skills : [];\nconst tools = Array.isArray(v.tools) ? v.tools : [];\nconst yrs = (typeof v.experience_years === 'number' && !isNaN(v.experience_years)) ? v.experience_years : null;\nconst support = !!v.support_experience;\nconst eng = (v.english_level || 'none').toString().toLowerCase();\nconst breakdown = { experience: 0, support: 0, english: 0, tools: 0 };\nif (yrs !== null) {\n  if (yrs >= 2) breakdown.experience = 40;\n  else if (yrs >= 1) breakdown.experience = 25;\n  else if (yrs > 0) breakdown.experience = 10;\n}\nif (support) breakdown.support = 25;\nif (eng === 'fluent') breakdown.english = 20;\nelse if (eng === 'good') breakdown.english = 15;\nelse if (eng === 'basic') breakdown.english = 5;\nif (tools.length > 0) breakdown.tools = 15;\nlet score = breakdown.experience + breakdown.support + breakdown.english + breakdown.tools;\nif (score > 100) score = 100;\nconst hasInfo = yrs !== null || skills.length > 0 || eng !== 'none' || tools.length > 0;\nlet status = 'reject';\nif (!hasInfo) status = 'more_info';\nelse if (score >= 70) status = 'shortlist';\nelse if (score >= 40) status = 'more_info';\nreturn [{ json: { name: v.name, message: v.message, role: 'Customer Support Agent', skills, experience_years: yrs, support_experience: support, english_level: eng, tools, availability: v.availability || '', notes: v.notes || '', score, breakdown, status } }];"
+      }
+    },
+    {
+      "id": "30ef9ab8-5a22-4754-858c-db5d1c72779d",
+      "name": "Route Application",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        1300,
+        320
+      ],
+      "parameters": {
+        "mode": "rules",
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "b1ccee50-d1ae-4987-9a9a-58737226f844",
+                    "leftValue": "={{ $json.status }}",
+                    "rightValue": "shortlist",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Shortlist"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "eeb9db8f-64d4-4567-906d-5751a6d60deb",
+                    "leftValue": "={{ $json.status }}",
+                    "rightValue": "more_info",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "More Info"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "874f4295-fecd-4fc1-a0e7-5d533cc3afd9",
+                    "leftValue": "={{ $json.status }}",
+                    "rightValue": "reject",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Reject"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": true,
+          "fallbackOutputKey": "More Info"
+        }
+      }
+    },
+    {
+      "id": "380fae02-6b56-47cb-921e-f294d994b1ba",
+      "name": "Invite to Interview",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1560,
+        80
+      ],
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ 'Write a warm interview invitation for this job applicant. Applicant name: ' + $json.name + '. Role: Customer Support Agent. Fit score: ' + $json.score + ' out of 100. Experience: ' + ($json.experience_years === null ? 'not stated' : $json.experience_years + ' years') + '. Skills: ' + JSON.stringify($json.skills) + '. Invite them to a short interview, ask them to reply with two time slots that suit them this week, and say what to bring (their CV). Friendly, under 120 words. Return only the reply text, no JSON, no markdown.' }}",
+        "options": {
+          "systemMessage": "You are a hiring assistant for a small business. Write a warm interview invitation (max 120 words): congratulate the applicant, name the role (Customer Support Agent), ask them to reply with two interview time slots this week, and say to bring their CV. Never invent a salary, start date, or interview location. Return ONLY the reply text, no JSON, no markdown."
+        }
+      }
+    },
+    {
+      "id": "038f563f-5781-4e28-bf95-10255b1f4fa7",
+      "name": "Request More Info",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1560,
+        240
+      ],
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ 'Write a short, friendly reply for this job applicant. Applicant name: ' + $json.name + '. Role: Customer Support Agent. Their application did not give us enough to judge the fit, so ask for the missing detail in one clear message: their work history (roles and years), their English level, and any tools they have used. Warm, under 100 words. Return only the reply text, no JSON, no markdown.' }}",
+        "options": {
+          "systemMessage": "You are a hiring assistant for a small business. The applicant's message did not give enough detail to judge the fit. Ask for the missing detail in one short, friendly message: work history with years, English level, and tools used. Never invent experience for them. Return ONLY the reply text, no JSON, no markdown."
+        }
+      }
+    },
+    {
+      "id": "6f1e4460-9a2e-4840-bbf3-5bc942c3bda2",
+      "name": "Polite Rejection",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1560,
+        400
+      ],
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ 'Write a warm, respectful rejection for this job applicant. Applicant name: ' + $json.name + '. Role: Customer Support Agent. Thank them for applying, say this role needs more customer support experience than their application shows, and say we will keep their details for future roles. Kind, under 100 words. Return only the reply text, no JSON, no markdown.' }}",
+        "options": {
+          "systemMessage": "You are a hiring assistant for a small business. Write a warm, respectful rejection (max 100 words): thank the applicant, say this role needs more customer support experience, and say their details will be kept for future roles. Never be harsh or give a fake reason. Return ONLY the reply text, no JSON, no markdown."
+        }
+      }
+    },
+    {
+      "id": "1cd7c7cf-9e3c-4521-bafc-3e2c28bddbd6",
+      "name": "Reply \u2014 Screening Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1820,
+        320
+      ],
+      "parameters": {
+        "options": {},
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: $('Score Fit').first().json.status, score: $('Score Fit').first().json.score, breakdown: $('Score Fit').first().json.breakdown, name: $('Score Fit').first().json.name, role: $('Score Fit').first().json.role, reply: $json.output, message: 'Screening reply ready.' }) }}"
+      }
+    },
+    {
+      "id": "e745b829-70d7-4445-bc6c-52e8081c6c42",
+      "name": "Groq Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        520,
+        80
+      ],
+      "credentials": {
+        "groqApi": {
+          "id": "7JX1ltl0qs1xrSEY",
+          "name": "Groq account"
+        }
+      },
+      "parameters": {
+        "model": "openai/gpt-oss-120b",
+        "options": {
+          "temperature": 0.3,
+          "maxTokensToSample": 300
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
